@@ -1,0 +1,9 @@
+[Unit]
+Description=Régulateur de fréquence CPU
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/regulateur_freq.sh
+
+[Install]
+WantedBy=multi-user.target

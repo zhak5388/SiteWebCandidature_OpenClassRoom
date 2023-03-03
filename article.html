@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8"/>
+		<link href="style.css" rel="stylesheet"/>
+		<link href="pictures/owl.png" rel="icon"/>
+		<title>Création et mise en place d’un daemon sous Fedora</title>
+	</head>
+	<body>
+		<header>
+			<div id="wrapper_header">
+				<nav>
+					<ul>
+						<li><a href="index.html">Acceuil</a></li>
+						<li><a href="a_propos.html">À propos</a></li>
+					</ul>
+				</nav>
+				
+				<div id="titre_logo">
+					<img src="pictures/owl.png" alt="Logo du site - Hibou"/><h1>L'Antre</h1>
+				</div>
+				
+				<div id="social_header">
+					<ul>
+						<li class="li_facebook"><a href="#"><img src="pictures/empty.png" alt="Logo Facebook"></a></li>
+						<li class="li_reddit"><a href="#"><img src="pictures/empty.png" alt="Logo Reddit"></a></li>
+						<li class="li_twitter"><a href="#"><img src="pictures/empty.png" alt="Logo Twitter"></a></li>
+					</ul>
+				</div>
+			</div>
+		</header>
+		
+		<div id="wrapper_article_article">
+			<article>
+	
+				<h1>Création et mise en place d'un daemon sous Fedora</h1>
+				<h1 id="titre_alternatif">Ou : comment faire en sorte que mon pc portable ne surchauffe pas ?</h1>
+
+				<h2>Introduction</h2>
+
+				<p>Il y a environ 6 mois, je me suis procuré un nouvel ordinateur portable. Mon ancien pc se faisait vieux (presque 10 ans !) et malgré toutes mes tentatives de résurrection il demandait à prendre sa retraite.
+Je me suis donc acheté un ThinkPad, y ai installé Fedora (Une distribution GNU/Linux) tout en laissant Windows 10 pré-installé. J’étais très content de mon nouveau système d’exploitation (L’environnement de bureau gnome 34 est super), seulement voilà, il y avait un petit bémol : j’avais remarqué que le système de refroidissement s’activait moins sur Fedora que sur Windows.</p>
+
+				<p>Cela était très embêtant : j’avais aucune envie qu’il y ait un <em>risque de surchauffe</em> sur Fedora. Dans cet article, je vais donc vous raconter ma petite aventure et comment j’en suis arrivé à écrire un petit script pour éviter une surchauffe de mon nouveau pc.</p>
+
+				<h2>Petit état des lieux</h2>
+
+				<p>Dans un premier temps, je voulais comprendre ce qui ne fonctionnait pas. J’ai tout simplement soumis mon pc à un stress test. (En utilisant AIDA64 sur Windows et s-tui sur Fedora). Résultat :</p>
+				<ul> 
+				<li>Sur Windows : À un taux d’utilisation de 100 % du processeur, la température avoisinait les 55°C avec une fréquence de 2900 mHz</li>
+				<li>Sur Fedora : À un taux d’utilisation de 100 % du processeur, la température <em>avoisinait les 90°C (!)</em> avec une fréquence de 3400 mHz</li>
+</ul>
+
+				<a href="pictures/s_tui.png" title="Cliquez pour aggrandir"><img src="pictures/s_tui.png" alt="Catpure écran du logiciel s-tui"/></a>
+
+				<p>Cela me laissait penser que le problème venait du fait que la fréquence du processeur n’était pas régulé.</p>
+
+				<h2>Thermald, throttle et idée du script</h2>
+
+				<p>Au début je me suis dit qu’il s’agissait d’un simple problème de configuration post-installation. J’ai fait quelque recherches et j’ai appris qu’il existe un daemon (un processus s’exécutant en arrière plan) nommé <strong>thermald</strong>. Thermald est donc un daemon qui a a en charge la mesure et le contrôle des température des processeurs intel afin d’éviter une éventuelle surchauffe.</p>
+
+				<p>Génial, non ? Il suffit d’installer/configurer thermald et problème résolu ! Non ? Eh bien, non. Après avoir longtemps errer sur des forums de Lenovo et Thinkpad, je me suis rendu compte que thermald était effectivement bien installé sur Fedora mais ne prenait pas en charge mon pc.</p>
+
+				<p>Retour à la case de départ donc ? Non, pas exactement. Dans mes recherches, j’ai appris que certains modèles de ThinkPad le processeur souffrait d’un étranglement thermique. (Lien de l’article où Lenovo admet le problème est <a href="https://www.notebookcheck.net/Lenovo-admits-ThinkPad-CPU-throttling-problem-when-running-Linux-fix-in-development.435549.0.html">ici</a>). Je ne vais pas expliquer ce que c’est exactement un étranglement thermique, mais plutôt ce que j’ai appris en essayant de comprendre ce que c’était et qui va me servir par la suite. (Mais je vous mets un lien <a href="https://www.hardwarecooking.fr/guide-thermal-throttling/">ici</a>)</p>
+
+				<p>Une personne (<a href="https://github.com/erpalma/throttled">erpalma</a>) avait réussi à palier à ce problème en <a href="https://old.reddit.com/r/thinkpad/comments/870u0a/t480s_linux_throttling_bug/">développant</a> un programme baptisé <em>throttled</em>. J’ai appris deux choses : la première c’est que ce programme est un daemon et la deuxième c’est que il était assez facile d’exécuter un script en arrière plan à chaque fois que l’ordinateur démarre via <strong>Systemd</strong> (Systemd est un système d’initialisation. En très simplifié, il est le premier processus exécuté et qui a la charge de démarrer tous les autres processus)</p>
+
+				<p>Du coup, mon idée était de faire un script qui se lancerait à chaque démarrage via Systemd. C’est bien beau de vouloir faire un script pour régler le problème éventuel de surchauffe, mais comment ? Dans mes recherches (Oui, ça m’a pris des jours) j’étais tombé sur deux programmes. Le premier permet de régler la vitesse du ventilateur. Le deuxième permet de fixer une fréquence limite au processeur.</p>
+
+				<p>La première option ne me plaisait pas, elle me paraissait trop risquée et de toute façon j’ai appris que dans mon cas la vitesse du ventilateur était régulé par le bios ; le système d’exploitation n’a pas la main dessus.</p>
+
+				<p>La deuxième option me paraissait bien. Il suffisait juste de taper une simple commande dans le terminal pour fixer une fréquence limite au processeur à ne pas dépasser (<code>cpupower frequency-set -u frequence_mhz</code>). Et en plus de cela, j’étais tombé sur une formule mathématique qui établissait une relation entre température du processeur et fréquence du processeur. (Cela confirmait bien mon hypothèse de départ)</p>
+
+				<p>Je me suis donc lancé dans la création d’un script régulant la fréquence du processeur et son taux d’utilisation.</p>
+
+				<h2>Création du script</h2>
+
+				<h3>Fonctionnement</h3>
+
+				<p>J’allais écrire mon script en <em>bash</em> car cela me permettait d’exécuter des commandes au sein du script. Le but était d’avoir un script qui allait dynamiquement fixer une fréquence limite en fonction du taux d’utilisation du processeur. Pour ce faire, mon idée est de définir dix paliers de taux d’utilisation, chaque palier ayant une différence de 10 % (Par exemple le palier 0 est compris entre 0 % et 10 % d’utilisation, le palier 1 entre 10 % et 20 %, etc..) Chaque palier étant associé à une fréquence limite.</p>
+
+				<p>Procéder de cette manière me permet de faire un script basique consistant en une boucle infinie sur laquelle est imbriqué plusieurs instructions conditionnelles. En gros, voici comment mon script opère :</p>
+				<ol>
+					<li>Calcul du taux d’utilisation</li>
+					<li>Si le taux d’utilisation est compris dans un palier donné, exécuter la commande <code>cpupower</code>. (Par exemple si le taux d’utilisation est compris entre 10 % et 20 % appliquer une fréquence limite de tant)</li>
+					<li>Répéter</li>
+</ol>
+
+				<h3>Définir les valeurs des fréquences limites</h3>
+
+				<p>Petit problème : comment trouver les bonnes valeurs pour les fréquences limites ? Je pouvais utiliser la formule que j’avais trouvé précédemment, mais je vous avoue je ne savais pas comment où trouver les bons paramètres. Du coup, je me suis dit que j’allais tout simplement observer comment Windows fixait ces valeurs, récupérer quelques données et faire une bonne vieille courbe de régression !</p>
+
+				<a href="pictures/scidavis.png" title="Cliquez pour aggrandir"><img src="pictures/scidavis.png" alt="Catpure écran SciDAVis - Courbe de regression"/></a>
+
+				<p>Grace à la courbe de régression, j’ai maintenant une formule et je peux donc faire ce petit tableau de valeurs !</p>
+
+				<table>
+					<thead>
+						<tr>
+							<th>Palier</th>
+							<th>Pourcentage</th>
+							<th>Fréquence (en mHz)</th>
+						</tr>
+	</thead>
+	
+					<tbody>
+						<tr><td>0</td><td>[0%-10%[</td><td>3500</td></tr>
+						<tr><td>1</td><td>[10%-20%[</td><td>3400</td></tr>
+						<tr><td>2</td><td>[20%-30%[</td><td>3200</td></tr>
+						<tr><td>3</td><td>[30%-40%[</td><td>3100</td></tr>
+						<tr><td>4</td><td>[40%-50%[</td><td>3000</td></tr>
+						<tr><td>5</td><td>[50%-60%[</td><td>2800</td></tr>
+						<tr><td>6</td><td>[60%-70%[</td><td>2600</td></tr>
+						<tr><td>7</td><td>[70%-80%[</td><td>2500</td></tr>
+						<tr><td>8</td><td>[80%-90%[</td><td>2400</td></tr>
+						<tr><td>9</td><td>[90%-100%]</td><td>2200</td></tr>
+	</tbody>
+</table>
+
+				<p>Ah ! Il y a un petit détail à régler : le calcul du taux d’utilisation du processeur. Sur ce point je me suis pas foulé, je n’avais pas la pêche le lire des pages du manuels du noyau linux, j’ai repris une partie du code d’un internaute qui avait <a href="https://stackoverflow.com/questions/23367857/accurate-calculation-of-cpu-usage-given-in-percentage-in-linux">répondu</a> à une question sur stackoverflow</p>
+
+				<h2>Explication (briève) du script</h2>
+
+				<p>Vous pouvez télécharger le script complet en <a href="files/regulateur_freq.sh">ici</a>. Je ne vais pas expliquer de détails du script, mais plutôt, je vais revenir sur certains points.</p>
+
+				<h3>Déclaration des variables</h3>
+
+				<pre>
+State0=0
+LowerLimitState0=0
+UpperLimitState0=10
+LimitFrequency0=3500mhz
+</pre>
+
+				<p>Dans un premier temps, je vais déclarer l’ensemble de mes variables. Ci-dessus, j’ai défini quatre variables pour mon palier 0 (Le palier entre0 % et 10%) :</p>
+				<ul>
+					<li><code>State0</code> est une variable pour identifier le palier 0. On le verra plus tard, mais cela me permet de ne pas refixer une fréquence limite si on n’a pas bougé de palier.</li>
+					<li><code>LowerLimitState0</code> correspond au début du palier. (Pour le palier 0 c’est 0 %)</li>
+					<li><code>UpperLimitState0</code> correspond à la fin du palier. (Pour le palier 0 c’est 10 %)</li>
+					<li><code>LimitFrequency0</code> correspond à la fréquence limite à appliquer au palier 0.</li>
+</ul>
+
+				<p>L’avantage de définir des variables en début de code, c’est que cela permet d’une part une meilleur lisibilité et d’autre part, si l’on veut modifier une valeur il suffit de modifier la valeur assignée à la variable plutôt que de changer la dite valeur à chaque partie du code.</p>
+
+				<h3>Boucle infinie</h3>
+
+				<pre>
+while true
+do
+	#Instruction pour calculer le taux d’utilisation du processeur
+	#Est ce que le taux d’utilisation correspond à tel palier ?
+done
+</pre>
+
+				<p>Il s’agit ici d’une boucle infinie, elle va exécuter chaque instruction contenue à la l’intérieur indéfiniment. (Ce qui est parfait dans notre cas, on veut que le script fonctionne tout le temps)</p>
+
+				<h3>Instruction conditionnelle</h3>
+
+				<pre>
+if [ $LowerLimitState0 -le $CPU_Percentage ] && [ $CPU_Percentage -lt $UpperLimitState0 ] && [ $CurrentState -ne $State0 ]
+		then
+			cpupower frequency-set -u $LimitFrequency0
+			CurrentState=$State0
+</pre>
+
+				<p>Ici, c’est une instruction conditionnelle : elle va exécuter les instructions contenues après <code>then</code> si les conditions ont été satisfaites. <code>-le</code> signifie plus petit ou égal à (pour less or equal), <code>-lt</code> signifie plus petit que (pour less than) et <code>-ne</code> signifie n’est pas égal à (pour is not equal to). On voit bien que si on est sur le même palier, les instructions ne sont pas executées</p>
+
+				<p>Maintenant que notre script est fin prêt, il faut maintenant qu’il se lance à chaque démarrage.</p>
+
+				<h2>Mise en place de notre script-deamon</h2>
+
+				<h3>Fichier de configuration</h3>
+
+				<p>Pour que systemd puisse lancer un processus au démarrage, il lui faut un fichier de configuration. (Je le mets également en téléchargement <a href="files/regulateur_freq.service">ici</a>)Le contenu du fichier le voici :</p>
+				<pre>
+[Unit]
+Description=Régulateur de fréquence CPU
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/regulateur_freq.sh
+
+[Install]
+WantedBy=multi-user.target
+</pre>
+
+				<p>Ici, rien de vraiment compliqué, on lui donne une description, où est ce que notre script sera stocké (<code>ExecStart</code>).
+Il suffit d’ouvrir un bloc-notes de l’enregistrer avec l’extension <code>.service</code> (Par exemple <code>regulateur_freq.service</code>)</p>
+
+				<h3>Copie du fichier de configuration et du script</h3>
+
+				<p>Le fichier de configuration doit être enregistre dans le dossier <code>/etc/systemd/system/</code>. Pour cela on lance dans un terminal la commande :</p>
+				<pre>
+sudo cp regulateur_freq.service /etc/systemd/system/regulateur_freq.service
+</pre>
+				
+				<p>De même pour notre script, il faut le rendre exécutable, puis le copier vers le dossier <code>/usr/bin/</code>.</p>
+
+				<pre>
+sudo chmod u+x egulateur_freq.sh
+sudo cp regulateur_freq.sh /usr/bin/regulateur_freq.sh
+</pre>
+
+				<h3>Finalisation</h3>
+
+				<p>Maintenant, il nous reste plus qu’à finaliser tout cela :</p>
+				<pre>
+sudo systemctl daemon-reload
+sudo systemctl start regulateur_freq.service
+sudo systemctl enable regulateur_freq.service
+</pre>
+
+				<p>La première ligne permet de prendre en compte le nouveau daemon qu’on l’on a jouté. La deuxième ligne permet de lancer notre daemon, enfin la dernière ligne demande a Sytemd de l’exécuter à chaque démarrage.</p>
+				
+				<h2>Conclusion</h2>
+
+				<p>J’espère que la lecture de l’article vous aura plus ! Pour ma part, je peux tranquillement utiliser mon pc sans craindre une surchauffe et ce fut assez amusant d’apprendre deux, trois bricoles sur le daemon. À la prochaine !</p>
+				
+			</article>
+		</div>
+		
+		<footer>
+			<div id="wrapper_footer">
+				<h1>L'Antre - 2022</h1>
+				<div id="social_footer">
+					<ul>
+						<li class="li_facebook"><a href="#"><img src="pictures/empty.png" alt="Logo Facebook"></a></li>
+						<li class="li_reddit"><a href="#"><img src="pictures/empty.png" alt="Logo Reddit"></a></li>
+						<li class="li_twitter"><a href="#"><img src="pictures/empty.png" alt="Logo Twitter"></a></li>
+					</ul>
+				</div>
+			</div>
+		</footer>
+	</body>
+</html>
